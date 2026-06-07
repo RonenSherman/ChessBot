@@ -127,7 +127,7 @@ class MoveEncoder:
                 df = 0
             else:
                 df = 1
-
+#h
             dr = 1
 
             tr = fr + dr
