@@ -1,0 +1,156 @@
+import chess
+
+class MoveEncoder:
+    ACTION_SIZE = 64 * 73
+
+    KNIGHT_ORDER = [
+        (-2, -1), (-2, 1),
+        (-1, -2), (-1, 2),
+        (1, -2), (1, 2),
+        (2, -1), (2, 1),
+    ]
+
+    KNIGHT_TO_ID = {m: i for i, m in enumerate(KNIGHT_ORDER)}
+
+    DIRS = [
+        (-1, 0), (1, 0),
+        (0, -1), (0, 1),
+        (-1, -1), (-1, 1),
+        (1, -1), (1, 1),
+    ]
+
+    DIR_TO_ID = {d: i for i, d in enumerate(DIRS)}
+
+    # python-chess promotion constants
+    PROMO_PIECE = {
+        chess.KNIGHT: 0,
+        chess.BISHOP: 1,
+        chess.ROOK: 2,
+    }
+
+    PROMO_PIECES = [
+        chess.KNIGHT,
+        chess.BISHOP,
+        chess.ROOK,
+    ]
+
+    # MOVE -> ACTION
+    def encode(self, move: chess.Move):
+
+        from_sq = move.from_square
+        to_sq = move.to_square
+
+        fr, ff = divmod(from_sq, 8)
+        tr, tf = divmod(to_sq, 8)
+
+        dr = tr - fr
+        df = tf - ff
+
+        promotion = move.promotion
+
+        # UNDERPROMOTIONS
+        if promotion in self.PROMO_PIECE:
+
+            # left / forward / right (relative file delta)
+            if df == -1:
+                direction = 0
+            elif df == 0:
+                direction = 1
+            elif df == 1:
+                direction = 2
+            else:
+                raise ValueError("Invalid promotion move")
+
+            plane = 64 + self.PROMO_PIECE[promotion] * 3 + direction
+
+        # KNIGHTS
+        elif (dr, df) in self.KNIGHT_TO_ID:
+
+            plane = 56 + self.KNIGHT_TO_ID[(dr, df)]
+
+
+        # SLIDING / QUEEN PROMO
+        else:
+            plane = self._encode_slide(dr, df)
+
+        return from_sq * 73 + plane
+
+    # ACTION -> MOVE
+    def decode(self, action):
+
+        from_sq = action // 73
+        plane = action % 73
+
+        fr, ff = divmod(from_sq, 8)
+
+        # SLIDING
+        if plane < 56:
+
+            dir_id = plane // 7
+            distance = (plane % 7) + 1
+
+            dr, df = self.DIRS[dir_id]
+
+            tr = fr + dr * distance
+            tf = ff + df * distance
+
+            to_sq = tr * 8 + tf
+
+            return chess.Move(from_sq, to_sq)
+
+        # KNIGHT
+        elif plane < 64:
+
+            knight_id = plane - 56
+            dr, df = self.KNIGHT_ORDER[knight_id]
+
+            tr = fr + dr
+            tf = ff + df
+
+            to_sq = tr * 8 + tf
+
+            return chess.Move(from_sq, to_sq)
+
+        # UNDERPROMOTION
+        else:
+
+            promo_plane = plane - 64
+
+            piece_id = promo_plane // 3
+            direction = promo_plane % 3
+
+            promotion = self.PROMO_PIECES[piece_id]
+
+            if direction == 0:
+                df = -1
+            elif direction == 1:
+                df = 0
+            else:
+                df = 1
+
+            dr = 1
+
+            tr = fr + dr
+            tf = ff + df
+
+            to_sq = tr * 8 + tf
+
+            return chess.Move(from_sq, to_sq, promotion=promotion)
+
+    # HELPER
+    def _encode_slide(self, dr, df):
+
+        if not (dr == 0 or df == 0 or abs(dr) == abs(df)):
+            raise ValueError(f"Illegal sliding move ({dr},{df})")
+
+        step_r = 0 if dr == 0 else (1 if dr > 0 else -1)
+        step_f = 0 if df == 0 else (1 if df > 0 else -1)
+
+        dir_id = self.DIR_TO_ID[(step_r, step_f)]
+
+        distance = max(abs(dr), abs(df))
+
+        if not (1 <= distance <= 7):
+            raise ValueError("Invalid distance")
+
+        return dir_id * 7 + (distance - 1)
