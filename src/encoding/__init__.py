@@ -1,15 +1,29 @@
-from encoder_decoder import MoveEncoder
+import chess
+import random
 
-from chess import Move
+from encoding.encoder_decoder import MoveEncoder
 
 encoder = MoveEncoder()
 
-for action in range(encoder.ACTION_SIZE):
+for _ in range(1000):
 
-    move = encoder.decode(action)
+    board = chess.Board()
 
-    new_action = encoder.encode(move)
+    for _ in range(random.randint(0, 50)):
 
-    assert action == new_action
+        if board.is_game_over():
+            break
 
-print("Passed!")
+        board.push(random.choice(list(board.legal_moves)))
+
+    for move in board.legal_moves:
+
+        action = encoder.encode(move)
+
+        decoded = encoder.decode(action)
+
+        assert move == decoded, (
+            f"{move} -> {action} -> {decoded}"
+        )
+
+print("Passed")

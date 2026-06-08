@@ -48,18 +48,36 @@ class MoveEncoder:
 
         promotion = move.promotion
 
-        # UNDERPROMOTIONS
-        if promotion in self.PROMO_PIECE:
+        # QUEEN PROMOTION = normal move
+        if promotion == chess.QUEEN:
+            plane = self._encode_slide(dr, df)
 
-            # left / forward / right (relative file delta)
-            if df == -1:
-                direction = 0
-            elif df == 0:
-                direction = 1
-            elif df == 1:
-                direction = 2
+        # UNDERPROMOTIONS
+        elif promotion in self.PROMO_PIECE:
+
+            # White promotion
+            if dr > 0:
+
+                if df == -1:
+                    direction = 0
+                elif df == 0:
+                    direction = 1
+                elif df == 1:
+                    direction = 2
+                else:
+                    raise ValueError("Invalid promotion move")
+
+            # Black promotion
             else:
-                raise ValueError("Invalid promotion move")
+
+                if df == 1:
+                    direction = 0
+                elif df == 0:
+                    direction = 1
+                elif df == -1:
+                    direction = 2
+                else:
+                    raise ValueError("Invalid promotion move")
 
             plane = 64 + self.PROMO_PIECE[promotion] * 3 + direction
 
@@ -68,7 +86,6 @@ class MoveEncoder:
 
             plane = 56 + self.KNIGHT_TO_ID[(dr, df)]
 
-
         # SLIDING / QUEEN PROMO
         else:
             plane = self._encode_slide(dr, df)
@@ -76,68 +93,16 @@ class MoveEncoder:
         return from_sq * 73 + plane
 
     # ACTION -> MOVE
-    def decode(self, action):
+    def decode(self, action, board):
 
-        from_sq = action // 73
-        plane = action % 73
+        for move in board.legal_moves:
+            if self.encode(move) == action:
+                return move
 
-        fr, ff = divmod(from_sq, 8)
+        raise ValueError(
+            f"Action {action} is not legal in this position"
+        )
 
-        # SLIDING
-        if plane < 56:
-
-            dir_id = plane // 7
-            distance = (plane % 7) + 1
-
-            dr, df = self.DIRS[dir_id]
-
-            tr = fr + dr * distance
-            tf = ff + df * distance
-
-            to_sq = tr * 8 + tf
-
-            return chess.Move(from_sq, to_sq)
-
-        # KNIGHT
-        elif plane < 64:
-
-            knight_id = plane - 56
-            dr, df = self.KNIGHT_ORDER[knight_id]
-
-            tr = fr + dr
-            tf = ff + df
-
-            to_sq = tr * 8 + tf
-
-            return chess.Move(from_sq, to_sq)
-
-        # UNDERPROMOTION
-        else:
-
-            promo_plane = plane - 64
-
-            piece_id = promo_plane // 3
-            direction = promo_plane % 3
-
-            promotion = self.PROMO_PIECES[piece_id]
-
-            if direction == 0:
-                df = -1
-            elif direction == 1:
-                df = 0
-            else:
-                df = 1
-#h
-            dr = 1
-
-            tr = fr + dr
-            tf = ff + df
-
-            to_sq = tr * 8 + tf
-
-            return chess.Move(from_sq, to_sq, promotion=promotion)
-
-    # HELPER
     def _encode_slide(self, dr, df):
 
         if not (dr == 0 or df == 0 or abs(dr) == abs(df)):
